@@ -1,0 +1,135 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+Wayne Luo
+HW2
+
+```{r}
+library(ggthemes)
+library(ggplot2)
+library(tidymodels)
+library(tidyverse)
+library(corrplot)
+library(yardstick)
+tidymodels_prefer()
+```
+
+```{r}
+abalone <- read.csv(file = 'abalone.csv')
+abalone %>% head()
+```
+QUESTION 1:
+```{r}
+abalone["age"] <- abalone$rings + 1.5
+head(abalone)
+```
+QUESTION 2:
+```{r}
+set.seed(3435)
+abalone_split <- initial_split(abalone, prop = 0.80, strata = age)
+abalone_train <- training(abalone_split)
+abalone_test <- testing(abalone_split)
+```
+
+QUESTION 3:
+```{r}
+?tidymodels
+abalone_train_new <- abalone_train %>% select(-rings)
+abalone_train_new %>% head()
+```
+
+```{r}
+ad_rec <- recipe(age~ ., data = abalone_train_new) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_interact(terms = ~ type:shucked_weight) %>% 
+  step_interact(terms = ~ longest_shell:diameter) %>% 
+  step_interact(terms = ~ shucked_weight:shell_weight) %>% 
+  step_normalize(all_nominal_predictors())
+
+ad_rec
+````
+
+
+QUESTION 4:
+```{r}
+lm_model_abalone <- linear_reg() %>% 
+  set_engine("lm")
+```
+
+QUESTION 5:
+```{r}
+lm_wflow_abalone <- workflow() %>% 
+  add_model(lm_model_abalone) %>% 
+  add_recipe(ad_rec)
+```
+
+QUESTION 6:
+```{r}
+hypo_abalone <- data.frame(type = "F",longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, 
+                           shucked_weight = 1, viscera_weight = 2, shell_weight = 1)
+
+lm_fit_abalone <- fit(lm_wflow_abalone, abalone_train_new)
+lm_fit_abalone %>% extract_fit_parsnip() %>% 
+  tidy()
+res <- predict(lm_fit_abalone, new_data = hypo_abalone)
+res %>% head()
+```
+
+
+QUESTION 7:
+
+```{r}
+abalone_train_res <- predict(lm_fit_abalone, new_data = abalone_train_new)
+abalone_train_res
+```
+
+
+
+```{r}
+abalone_train_res <- bind_cols(abalone_train_res, abalone_train_new %>% select(age))
+abalone_train_res %>% head()
+```
+```{r}
+rmse(abalone_train_res, truth = age, estimate = .pred)
+```
+```{r}
+abalone_metrics <- metric_set(rmse, rsq, mae)
+abalone_metrics(abalone_train_res, truth = age, estimate = .pred)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
