@@ -1,0 +1,197 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r message=FALSE, warning=FALSE}
+options(warn = -1)
+library(tidyverse)
+library(ggthemes)
+library(ggplot2)
+library(tidymodels)
+library(corrplot)
+library(yardstick)
+library(ISLR)
+library(ISLR2)
+library(discrim)
+library(corrr)
+tidymodels_prefer()
+```
+
+```{r}
+titanic <- read.csv(file="/Users/honchowayne/Desktop/titanic.csv")
+titanic %>% head()
+```
+
+```{r}
+titanic$survived <- as.factor(titanic$survived)
+titanic$survived <- factor(titanic$survived, levels = c("Yes" , "No"))
+titanic$pclass <- as.factor(titanic$pclass)
+titanic$sex <- as.factor(titanic$sex)
+```
+
+Question1: Split the data
+```{r}
+set.seed(3435)
+titanic_split <- initial_split(titanic,strata = survived, prop = 0.80)
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
+titanic_split
+```
+```{r}
+dim(titanic_train) #number seems right to me
+```
+```{r}
+dim(titanic_test) #number match the Assess number
+```
+
+Question2: Fold the training data, k=10
+```{r}
+  
+titanic_rec <- recipe(survived ~ pclass + sex + age + sib_sp + parch + fare, data = titanic_train) %>% 
+  step_impute_linear(age) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_interact(terms =  ~ sex_male:fare) %>% 
+  step_interact(terms =  ~ age:fare)
+```
+```{r}
+set.seed(3534)
+titanic_folds <- vfold_cv(titanic_train, v=10)
+titanic_folds
+```
+
+Question3:
+
+1. We could have the chance to use all of our data by applying this method. 
+Generally, compared to traditional fitting and testing model on the entire 
+training set, we get to  build K different models, so we are able to make 
+predictions on all of our data. 
+
+   The second reason I could think of is that we can be more confident in our 
+algorithm performance. When we do a single evaluation on our test set, 
+we get only one result. This result may be because of chance or a biased test 
+set for some reason. By training five (or ten) different models we can 
+understand better what’s going on.
+
+2. If we did use the entire training set, the resampling method is validation 
+set approach
+
+Question4:
+```{r}
+#1
+log_reg_titanic <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+log_wkf<-workflow() %>% 
+  add_model(log_reg_titanic) %>% 
+  add_recipe(titanic_rec)
+
+#2
+lda_mod_titanic <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+
+lda_wkf<-workflow() %>% 
+  add_model(lda_mod_titanic) %>% 
+  add_recipe(titanic_rec)
+
+#3
+qda_mod_titanic <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+
+qda_wkf<-workflow() %>% 
+  add_model(qda_mod_titanic) %>% 
+  add_recipe(titanic_rec)
+
+#The total folds is going to be 30 (3x10)
+```
+
+Question5:
+```{r}
+log_fit_rs <- log_wkf %>% 
+  fit_resamples(titanic_folds)
+
+lda_fit_rs <- lda_wkf %>% 
+  fit_resamples(titanic_folds)
+
+qda_fit_rs <- qda_wkf %>% 
+  fit_resamples(titanic_folds)
+```
+
+Question7:
+```{r}
+log_metrics <- collect_metrics(log_fit_rs)
+log_metrics
+```
+```{r}
+lda_metrics <- collect_metrics(lda_fit_rs)
+lda_metrics
+```
+```{r}
+qda_metrics <- collect_metrics(qda_fit_rs)
+qda_metrics
+```
+The logistic regression analysis is the best model among 
+these three because it has the highest accuracy mean.
+
+Question7: fit the model, using training dataset
+
+```{r}
+final_fit <- fit(log_wkf, titanic_train)
+final_fit
+```
+```{r}
+predict(final_fit, new_data = titanic_train, type = "prob")
+```
+```{r}
+train_acc <- augment(final_fit, new_data = titanic_train) %>% 
+  accuracy(truth = survived, estimate=.pred_class)
+train_acc
+```
+
+Question8:
+```{r}
+predict(final_fit, titanic_test, type = "prob")
+```
+```{r}
+test_acc <- augment(final_fit, new_data = titanic_test) %>% 
+  accuracy(truth = survived, estimate = .pred_class)
+test_acc
+```
+```{r}
+compare <- bind_cols(log_metrics[1,3], test_acc$.estimate) 
+names(compare)[1] <- "average folds accuracy"
+names(compare)[2] <- "testing accuracy"
+compare
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
